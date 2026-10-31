@@ -5,7 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import PlainTextResponse
 
 # Set your secret key (or load it from Render environment variables)
-API_KEY = os.getenv("MCP_API_KEY", "my-super-secret-key-2026")
+API_KEY = os.getenv("MCP_API_KEY", "my-super-secret-key-srijay143")
 
 mcp = FastMCP("YouTubeAutomationServer")
 
