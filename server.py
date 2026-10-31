@@ -1,6 +1,5 @@
 from mcp.server.fastmcp import FastMCP
 
-# MCP సర్వర్ సెటప్
 mcp = FastMCP("YouTubeAutomationServer")
 
 @mcp.tool()
@@ -14,4 +13,5 @@ def get_tags(topic: str) -> str:
     return f"Tags: #{topic}, #{topic}Tutorial, #ViralVideo, #Trending"
 
 if __name__ == "__main__":
-    mcp.run(transport="sse")
+    # sse బదులుగా streamable-http (లేదా http) ఉపయోగించండి
+    mcp.run(transport="streamable-http")
