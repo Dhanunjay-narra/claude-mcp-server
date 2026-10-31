@@ -1,14 +1,13 @@
 import os
 import uvicorn
 from mcp.server.fastmcp import FastMCP
-from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route, Mount
+from starlette.routing import Route
 
-# 1. MCP ఇన్‌స్టాన్స్
-mcp = FastMCP("yt-custom-connector")
+# MCP సర్వర్ సెటప్
+mcp = FastMCP("youtube-custom-connector")
 
 @mcp.tool()
 def generate_youtube_idea(topic: str) -> str:
@@ -20,36 +19,20 @@ def get_tags(topic: str) -> str:
     """Returns viral tags for the video"""
     return f"Tags: #{topic}, #{topic}Tutorial, #ViralVideo, #Trending"
 
-# 2. SSE Sub-App
-sse_sub_app = mcp.sse_app()
+# Streamable HTTP ASGI యాప్
+app = mcp.streamable_http_app()
 
-# 3. 405 ఎర్రర్ రాకుండా అన్ని మెథడ్స్‌కి సమాధానం ఇచ్చే రూట్ హ్యాండ్లర్
-async def root_handler(request):
+# Claude వెరిఫికేషన్ కోసం 200 OK ఇచ్చే రూట్ హ్యాండ్లర్ (405 రాకుండా చేస్తుంది)
+async def health_check(request):
     if request.method == "HEAD":
         return Response(status_code=200)
     return JSONResponse({
         "status": "healthy",
-        "service": "yt-custom-connector",
-        "mcp_endpoint": "/sse"
+        "service": "youtube-custom-connector"
     })
 
-# 4. మెయిన్ Starlette యాప్ (CORS సపోర్ట్‌తో)
-middleware = [
-    Middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-]
-
-app = Starlette(
-    routes=[
-        Route("/", endpoint=root_handler, methods=["GET", "POST", "HEAD", "OPTIONS"]),
-        Mount("/", app=sse_sub_app),  # /sse మరియు /messages రూట్లను మౌంట్ చేస్తుంది
-    ],
-    middleware=middleware,
-)
+# అప్లికేషన్‌కు రూట్ మరియు CORS జోడించడం
+app.routes.insert(0, Route("/", endpoint=health_check, methods=["GET", "POST", "HEAD", "OPTIONS"]))
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
