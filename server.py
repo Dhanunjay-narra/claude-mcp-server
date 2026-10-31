@@ -1,12 +1,13 @@
 import os
 import uvicorn
 from mcp.server.fastmcp import FastMCP
+from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
+from starlette.routing import Route, Mount
 
-# 1. MCP ఇన్‌స్టాన్స్
+# 1. MCP Server Definition
 mcp = FastMCP("youtube-custom-connector")
 
 @mcp.tool()
@@ -19,11 +20,12 @@ def get_tags(topic: str) -> str:
     """Returns viral tags for the video"""
     return f"Tags: #{topic}, #{topic}Tutorial, #ViralVideo, #Trending"
 
-# 2. FastMCP అధికారిక ASGI అప్లికేషన్
-app = mcp.streamable_http_app()
+# 2. Native Streamable HTTP sub-application
+mcp_sub_app = mcp.streamable_http_app()
 
-# 3. Claude వెరిఫికేషన్ కోసం రూట్ (/) 200 OK హ్యాండ్లర్
-async def health_check(request):
+# 3. Route Handlers
+# Root path (/) Claude health check pass avvadaniki
+async def root_health(request):
     if request.method == "HEAD":
         return Response(status_code=200)
     return JSONResponse({
@@ -31,18 +33,31 @@ async def health_check(request):
         "service": "youtube-custom-connector"
     })
 
-# రూట్ హ్యాండ్లర్‌ను మాత్రమే మొదటి రూట్‌గా చేర్చడం (Mount డూప్లికేషన్ లేకుండా)
-app.routes.insert(0, Route("/", endpoint=health_check, methods=["GET", "POST", "HEAD", "OPTIONS"]))
+# OAuth probing ki explicit 404 ivvali (appude Claude "No sign-in" allow chesthundhi)
+async def oauth_not_supported(request):
+    return Response(status_code=404)
 
-# 4. CORS యాడ్ చేయడం
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+# 4. Global CORS Middleware setup
+middleware = [
+    Middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["GET", "POST", "HEAD", "OPTIONS"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
+]
+
+# 5. Starlette routing order (Priority order)
+routes = [
+    Route("/.well-known/{path:path}", endpoint=oauth_not_supported, methods=["GET", "POST", "HEAD"]),
+    Route("/", endpoint=root_health, methods=["GET", "HEAD", "OPTIONS"]),
+    Mount("/mcp", app=mcp_sub_app),
+]
+
+app = Starlette(routes=routes, middleware=middleware)
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
+    # Render lo compulsory 0.0.0.0 bind cheyali
     uvicorn.run(app, host="0.0.0.0", port=port)
