@@ -7,8 +7,8 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, Mount
 
-# 1. FastMCP ఇన్‌స్టాన్స్
-mcp = FastMCP("youtube-custom-connector")
+# 1. FastMCP Instance
+mcp = FastMCP("yt-custom-connector")
 
 @mcp.tool()
 def generate_youtube_idea(topic: str) -> str:
@@ -20,35 +20,26 @@ def get_tags(topic: str) -> str:
     """Returns viral tags for the video"""
     return f"Tags: #{topic}, #{topic}Tutorial, #ViralVideo, #Trending"
 
-# 2. FastMCP యొక్క Streamable HTTP ASGI యాప్
-mcp_sub_app = mcp.streamable_http_app()
+# 2. FastMCP official Streamable HTTP ASGI app
+mcp_app = mcp.streamable_http_app()
 
-# 3. Claude వెరిఫికేషన్ కోసం 200 OK ఇచ్చే రెస్పాన్స్ (421 / 404 రాకుండా చేస్తుంది)
-async def health_check(request):
-    if request.method == "HEAD":
-        return Response(status_code=200)
-    return JSONResponse({
-        "status": "healthy",
-        "service": "youtube-custom-connector",
-        "endpoints": ["/", "/mcp"]
-    })
-
-# 4. CORS మిడిల్‌వేర్
+# 3. CORS Middleware
 middleware = [
     Middleware(
         CORSMiddleware,
         allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
 ]
 
-# 5. మెయిన్ స్టార్లెట్ అప్లికేషన్
+# 4. App creation: mcp_app direct ga root and /mcp rendu handle chestundi
+# Ekkada OAuth fake routes levu, so Claude sign-in adagadu.
 app = Starlette(
     routes=[
-        Route("/", endpoint=health_check, methods=["GET", "POST", "HEAD", "OPTIONS"]),
-        Mount("/mcp", app=mcp_sub_app),  # /mcp పాత్‌ను నేరుగా మౌంట్ చేస్తుంది
-        Mount("/", app=mcp_sub_app),     # రూట్ పాత్‌ను కూడా హ్యాండిల్ చేస్తుంది
+        Mount("/mcp", app=mcp_app),
+        Mount("/", app=mcp_app),
     ],
     middleware=middleware,
 )
