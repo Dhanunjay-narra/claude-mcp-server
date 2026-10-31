@@ -1,14 +1,13 @@
 import os
 import uvicorn
 from mcp.server.fastmcp import FastMCP
-from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route, Mount
+from starlette.routing import Route
 
 # 1. MCP ఇన్‌స్టాన్స్
-mcp = FastMCP("yt-custom-connector")
+mcp = FastMCP("youtube-custom-connector")
 
 @mcp.tool()
 def generate_youtube_idea(topic: str) -> str:
@@ -20,38 +19,28 @@ def get_tags(topic: str) -> str:
     """Returns viral tags for the video"""
     return f"Tags: #{topic}, #{topic}Tutorial, #ViralVideo, #Trending"
 
-# 2. FastMCP కి చెందిన నేటివ్ ASGI Streamable HTTP యాప్
-mcp_app = mcp.streamable_http_app()
+# 2. FastMCP అధికారిక ASGI అప్లికేషన్
+app = mcp.streamable_http_app()
 
-# 3. బ్రౌజర్‌లో 'Not Found' రాకుండా మరియు Claude హెల్త్-చెక్ పాస్ అవ్వడానికి 200 OK హ్యాండ్లర్
-async def homepage(request):
+# 3. Claude వెరిఫికేషన్ కోసం రూట్ (/) 200 OK హ్యాండ్లర్
+async def health_check(request):
     if request.method == "HEAD":
         return Response(status_code=200)
     return JSONResponse({
         "status": "healthy",
-        "service": "yt-custom-connector",
-        "mcp_ready": True
+        "service": "youtube-custom-connector"
     })
 
-# 4. CORS మిడిల్‌వేర్
-middleware = [
-    Middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["*"],
-    )
-]
+# రూట్ హ్యాండ్లర్‌ను మాత్రమే మొదటి రూట్‌గా చేర్చడం (Mount డూప్లికేషన్ లేకుండా)
+app.routes.insert(0, Route("/", endpoint=health_check, methods=["GET", "POST", "HEAD", "OPTIONS"]))
 
-# 5. స్టార్లెట్ యాప్ కాన్ఫిగరేషన్
-app = Starlette(
-    routes=[
-        Route("/", endpoint=homepage, methods=["GET", "POST", "HEAD", "OPTIONS"]),
-        Mount("/mcp", app=mcp_app),
-        Mount("/", app=mcp_app),
-    ],
-    middleware=middleware,
+# 4. CORS యాడ్ చేయడం
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 if __name__ == "__main__":
